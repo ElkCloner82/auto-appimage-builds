@@ -34,7 +34,9 @@ jobs:
           exit 0
 
       - name: Set up working directory
-        run: mkdir AppDir
+        run: |
+          mkdir AppDir
+          cd AppDir
 
       - name: Download latest release archive
         run: |
@@ -42,7 +44,6 @@ jobs:
 
       - name: Extract release and prepare AppDir
         run: |
-          cd AppDir
           unzip pdx_unlimiter-linux.zip -d pdxu
 
       - name: Create AppRun file
