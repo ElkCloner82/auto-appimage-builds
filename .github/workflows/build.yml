@@ -15,7 +15,7 @@ jobs:
       - name: Fetch latest upstream release info
         id: upstream
         run: |
-          curl -s https://api.github.com/repos/OWNER/REPO/releases/latest > release.json
+          curl -s https://api.github.com/repos/crschnick/pdx_unlimiter/releases/latest > release.json
           echo "tag_name=$(jq -r .tag_name release.json)" >> "$GITHUB_OUTPUT"
           echo "asset_url=$(jq -r '.assets[0].browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
         env:
