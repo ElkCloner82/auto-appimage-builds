@@ -58,14 +58,11 @@ jobs:
       - name: Create icon symlink
         run: |
           ln -s pdxu/resources/logo.png AppDir/pdxu.png
-          pwd
-          file pdxu.png
 
       - name: Download appimagetool
         run: |
           curl -L https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool
           chmod +x appimagetool
-          tree
 
       - name: Build AppImage
         run: ARCH=x86_64 ./appimagetool AppDir Pdx-Unlimiter.AppImage
