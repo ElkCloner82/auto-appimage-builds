@@ -40,7 +40,9 @@ jobs:
 
       - name: Download latest release archive
         run: |
+          echo "${{ steps.upstream.outputs.asset_url }}"
           curl -L "${{ steps.upstream.outputs.asset_url }}" -o pdx_unlimiter-linux.zip
+          cat pdx_unlimiter-linux.zip
 
       - name: Extract release and prepare AppDir
         run: |
