@@ -50,9 +50,9 @@ jobs:
 
       - name: Create AppRun file
         run: |
-          echo '#!/bin/sh' > AppDir/AppRun
-          echo 'exec $APPDIR/pdxu/bin/pdxu' >> AppDir/AppRun
-          chmod +x AppDir/AppRun
+          echo '#!/bin/sh' > AppRun
+          echo 'exec $APPDIR/pdxu/bin/pdxu' >> AppRun
+          chmod +x AppRun
 
       - name: Create pdxu.desktop
         run: |
@@ -60,10 +60,12 @@ jobs:
           
       - name: Create icon symlink
         run: |
-          ln -s app-dir/resources/icon.png AppDir/pdxu.png
+          ln -s pdxu/resources/logo.png pdxu.png
 
       - name: Clean up archive
-        run: rm AppDir/pdx_unlimiter-linux.zip
+        run: |
+          rm pdx_unlimiter-linux.zip
+          cd ..
 
       - name: Download appimagetool
         run: |
