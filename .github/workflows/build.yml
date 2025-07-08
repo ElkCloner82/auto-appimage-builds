@@ -36,7 +36,6 @@ jobs:
       - name: Set up working directory
         run: |
           mkdir AppDir
-          cd AppDir
 
       - name: Download latest release archive
         run: |
@@ -44,13 +43,13 @@ jobs:
 
       - name: Extract release and prepare AppDir
         run: |
-          unzip pdx_unlimiter-linux.zip -d pdxu
+          unzip pdx_unlimiter-linux.zip -d AppDir/pdxu
 
       - name: Create AppRun file
         run: |
-          echo '#!/bin/sh' > AppRun
-          echo 'exec $APPDIR/pdxu/bin/pdxu' >> AppRun
-          chmod +x AppRun
+          echo '#!/bin/sh' > AppDir/AppRun
+          echo 'exec $APPDIR/pdxu/bin/pdxu' >> AppDir/AppRun
+          chmod +x AppDir/AppRun
 
       - name: Create pdxu.desktop
         run: |
@@ -58,19 +57,15 @@ jobs:
           
       - name: Create icon symlink
         run: |
-          ln -s pdxu/resources/logo.png pdxu.png
+          ln -s pdxu/resources/logo.png AppDir/pdxu.png
           pwd
           file pdxu.png
-
-      - name: Clean up archive
-        run: |
-          rm pdx_unlimiter-linux.zip
-          cd ..
 
       - name: Download appimagetool
         run: |
           curl -L https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool
           chmod +x appimagetool
+          tree
 
       - name: Build AppImage
         run: ARCH=x86_64 ./appimagetool AppDir Pdx-Unlimiter.AppImage
