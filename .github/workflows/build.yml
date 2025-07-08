@@ -54,14 +54,8 @@ jobs:
 
       - name: Create pdxu.desktop
         run: |
-          cat <<EOF > AppDir/pdxu.desktop
-[Desktop Entry]
-Type=application
-Name=Pdx-Unlimiter
-Icon=pdxu
-Categories=Game
-EOF
-
+          echo -e "[Desktop Entry]\nType=Application\nName=Pdx-Unlimiter\nExec=pdxu\nIcon=pdxu\nCategories=Game;" > AppDir/pdxu.desktop
+          
       - name: Create icon symlink
         run: |
           ln -s app-dir/resources/icon.png AppDir/pdxu.png
