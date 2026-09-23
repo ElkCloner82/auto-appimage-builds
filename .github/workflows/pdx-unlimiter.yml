@@ -181,7 +181,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.check-release.outputs.tag }}
+          tag_name: pdx-unlimiter-${{ needs.check-release.outputs.tag }}
           files: dist/Pdx-Unlimiter.AppImage
           generate_release_notes: true
         env:
