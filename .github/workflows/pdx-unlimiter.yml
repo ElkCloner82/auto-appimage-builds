@@ -2,75 +2,187 @@ name: Build AppImage
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Adjust as needed
+    - cron: "0 * * * *"
   workflow_dispatch:
 
+concurrency:
+  group: pdx-unlimiter-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM_REPO: crschnick/pdx_unlimiter
+  ASSET_NAME: pdx_unlimiter-linux.zip
+
 jobs:
-  build:
+  check-release:
+    name: Check upstream release
     runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.compare.outputs.should_build }}
+      tag: ${{ steps.upstream.outputs.tag }}
+      asset_url: ${{ steps.upstream.outputs.asset_url }}
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Fetch latest upstream release info
+      - name: Fetch latest upstream release
         id: upstream
-        run: |
-          curl -s https://api.github.com/repos/crschnick/pdx_unlimiter/releases/latest > release.json
-          echo "tag_name=$(jq -r .tag_name release.json)" >> "$GITHUB_OUTPUT"
-          echo "asset_url=$(jq -r '.assets[] | select(.name == "pdx_unlimiter-linux.zip") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
 
-      - name: Fetch latest local release info (if any)
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest"
+          )"
+
+          tag="$(jq -er '.tag_name' <<< "$response")"
+          asset_url="$(
+            jq -er --arg name "$ASSET_NAME" \
+              '.assets[] | select(.name == $name) | .browser_download_url' \
+              <<< "$response"
+          )"
+
+          {
+            echo "tag=${tag}"
+            echo "asset_url=${asset_url}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fetch latest local release
         id: local
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest > release.json || echo "{}" > release.json
-          echo "tag_name=$(jq -r .tag_name release.json)" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
 
-      - name: Exit if release already published
-        if: steps.upstream.outputs.tag_name == steps.local.outputs.tag_name
-        run: |
-          echo "No new release."
-          exit 0
+          response="$(
+            curl --silent --show-error \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" \
+              || true
+          )"
 
-      - name: Set up working directory
-        run: |
-          mkdir AppDir
+          local_tag="$(jq -r '.tag_name // empty' <<< "${response:-{}}")"
+          echo "tag=${local_tag}" >> "$GITHUB_OUTPUT"
 
-      - name: Download latest release archive
+      - name: Compare release tags
+        id: compare
+        env:
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          LOCAL_TAG: ${{ steps.local.outputs.tag }}
         run: |
-          curl -L "${{ steps.upstream.outputs.asset_url }}" -o pdx_unlimiter-linux.zip
+          if [[ "$UPSTREAM_TAG" == "$LOCAL_TAG" ]]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "Release ${UPSTREAM_TAG} is already published."
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "A new release is available: ${UPSTREAM_TAG}"
+          fi
 
-      - name: Extract release and prepare AppDir
-        run: |
-          unzip pdx_unlimiter-linux.zip -d AppDir/pdxu
+  build:
+    name: Build AppImage
+    needs: check-release
+    if: needs.check-release.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
 
-      - name: Create AppRun file
-        run: |
-          echo '#!/bin/sh' > AppDir/AppRun
-          echo 'exec $APPDIR/pdxu/bin/pdxu' >> AppDir/AppRun
-          chmod +x AppDir/AppRun
+    steps:
+      - name: Restore upstream archive from cache
+        id: archive-cache
+        uses: actions/cache@v4
+        with:
+          path: pdx_unlimiter-linux.zip
+          key: pdx-unlimiter-${{ needs.check-release.outputs.tag }}
 
-      - name: Create pdxu.desktop
+      - name: Download upstream release archive
+        if: steps.archive-cache.outputs.cache-hit != 'true'
+        env:
+          ASSET_URL: ${{ needs.check-release.outputs.asset_url }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo -e "[Desktop Entry]\nType=Application\nName=Pdx-Unlimiter\nExec=pdxu\nIcon=pdxu\nCategories=Game;" > AppDir/pdxu.desktop
-          
-      - name: Create icon symlink
-        run: |
-          ln -s pdxu/resources/logo.png AppDir/pdxu.png
+          set -euo pipefail
+          curl --fail-with-body --location --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            "$ASSET_URL" \
+            --output pdx_unlimiter-linux.zip
+
+      - name: Restore appimagetool from cache
+        id: appimagetool-cache
+        uses: actions/cache@v4
+        with:
+          path: appimagetool
+          key: appimagetool-x86_64-v1
 
       - name: Download appimagetool
+        if: steps.appimagetool-cache.outputs.cache-hit != 'true'
         run: |
-          curl -L https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool
+          set -euo pipefail
+          curl --fail-with-body --location --silent --show-error \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
+            --output appimagetool
           chmod +x appimagetool
 
-      - name: Build AppImage
-        run: ARCH=x86_64 ./appimagetool AppDir Pdx-Unlimiter.AppImage
+      - name: Prepare AppDir
+        run: |
+          set -euo pipefail
 
-      - name: Upload release
+          mkdir -p AppDir/pdxu
+          unzip -q pdx_unlimiter-linux.zip -d AppDir/pdxu
+
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/sh
+          exec "$APPDIR/pdxu/bin/pdxu" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          cat > AppDir/pdxu.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Pdx-Unlimiter
+          Exec=pdxu
+          Icon=pdxu
+          Categories=Game;
+          EOF
+
+          ln -s pdxu/resources/logo.png AppDir/pdxu.png
+
+      - name: Build AppImage
+        run: |
+          set -euo pipefail
+          ARCH=x86_64 ./appimagetool AppDir Pdx-Unlimiter.AppImage
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdx-unlimiter-appimage
+          path: Pdx-Unlimiter.AppImage
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs:
+      - check-release
+      - build
+    if: needs.check-release.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pdx-unlimiter-appimage
+          path: dist
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.upstream.outputs.tag_name }}
-          files: Pdx-Unlimiter.AppImage
+          tag_name: ${{ needs.check-release.outputs.tag }}
+          files: dist/Pdx-Unlimiter.AppImage
+          generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
