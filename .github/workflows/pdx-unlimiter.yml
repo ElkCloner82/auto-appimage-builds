@@ -17,7 +17,7 @@ jobs:
         run: |
           curl -s https://api.github.com/repos/crschnick/pdx_unlimiter/releases/latest > release.json
           echo "tag_name=$(jq -r .tag_name release.json)" >> "$GITHUB_OUTPUT"
-          echo "asset_url=$(jq -r '.assets[1].browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
+          echo "asset_url=$(jq -r '.assets[] | select(.name == "pdx_unlimiter-linux.zip") | .browser_download_url' release.json)" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
